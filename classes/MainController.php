@@ -100,7 +100,7 @@ class MainController
             $mail->SMTPSecure = 'tls';
             $mail->Port = 587;
             */
-
+            $mail->CharSet = 'utf-8';
             //Recipients
             $mail->setFrom('robot@evg-it.ru', 'Robot Paul');
             $mail->addAddress($this->addressTo, $this->nameTo);
