@@ -11,11 +11,16 @@ spl_autoload_register('autoLoader');
 
 require_once  __DIR__ . '/config.php';
 require_once __DIR__ . '/lib/phpQuery/phpQuery.php';
+require_once __DIR__ . '/lib/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/lib/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/lib/PHPMailer/src/SMTP.php';
 
-if (!empty($parts)){
-    foreach ($parts as $part){
-        $controller = new MainController($siteUrl,$part,$lastDate);
+if (!empty($args)){
+    try {
+        $controller = new MainController($args);
         $controller->worker();
-        break;
+    } catch (Exception $e){
+        $e->getMessage();
     }
+
 }

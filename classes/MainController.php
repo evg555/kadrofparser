@@ -1,184 +1,125 @@
 <?php
 
-/**
-* Основной контроллер парсера.
-* Донор: http://vladivostok.farpost.ru/realty/sell_flats/
-*
-*/
-set_time_limit(0);
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 class MainController
 {
     public $siteUrl;
-	public $part;
-	public $lastDate;
+	public $parts;
+	public $lastDate = LAST_DATE;
+    public $addressTo;
+    public $nameTo;
+    private $_configFile = "";
 
-	public function __construct($siteUrl,$part,$lastDate)
+	public function __construct($args)
 	{
-		//Устанавливаем значения из конфига
-        $this->siteUrl = $siteUrl;
-        $this->part = $part;
-        $this->lastDate = $lastDate;
+        //Устанавливаем значения из конфига
+	    if (is_array($args)){
+	        foreach ($args as $key=>$arg){
+	            if (property_exists($this,$key)){
+	                $this->$key = $arg;
+                }
+            }
+        } else {
+	        throw new \Exception("Ошибка в файле конфигурации. Должен быть массив данных!");
+        }
+
+        $this->_configFile = $_SERVER["DOCUMENT_ROOT"]."/config.php";
 	}
 
     public function worker(){
-        //Получаем контент страницы с заказами
-        $url = $this->siteUrl.$this->part;
+	    foreach ($this->parts as $key=>$part){
+            //Получаем контент страницы с заказами
+            $url = $this->siteUrl.$part;
 
-        if ($content = file_get_contents($url)){
-            $document = phpQuery::newDocument($content);
+            if ($content = file_get_contents($url)){
+                $document = phpQuery::newDocument($content);
+
+                //Парсим данные
+                $data = $this->parseData($document);
+
+                $reestr = Reestr::getInstance();
+                $reestr->setData($key,$data);
+            }
+        }
+
+        $this->sendData($reestr->getData());
+
+    }
+
+	private function parseData($document){
+        //Получаем список заявок
+        $posts = $document->find(".project-list");
+        $data = [];
+        $i = 0;
+        foreach($posts as $post){
+            $pq = pq($post);
 
             //Находим даты постов не ранее последней
-            $dates = explode("\n",$document->find(".date")->text());
-            foreach ($dates as $date){
-                $date = explode(" ",$date)[0];
-                if ($date < $this->lastDate) break;
-            }
+            $date = explode(" ",$pq->find(".date")->text())[0];
+            if ($date < $this->lastDate) break;
+
+            //Формируем данные
+            $data[$i]['title'] = $pq->find(".project-title h6 a")->text();
+            $data[$i]['link'] = "http://www.kadrof.ru".$pq->find(".project-title h6 a")->attr("href");
+            $data[$i]['date'] = $pq->find(".date")->text();
+            $data[$i]['price'] = $pq->find(".budget span")->text();
+
+            $i++;
         }
-    }
 
-	public function parseLinks($links){
-
-		$document = new DOMDocument;
-		$apartmentData = array();   //Данные о квартире
-
-        foreach ($links as $link) {
-            if (!strstr($link, 'bulletin/')) {
-                if ($link == "help/PeriodicheskieUslugi") continue;
-                if ($apartment = $this->http->getApartment($link)) {
-                    if ($this->output) echo "Apartment URL: " . $link . "<br>";
-
-                    $this->currentURL = $link;
-
-                    //Загружаем контент в DOM
-                    //@$document->loadHtml($apartment);
-                    $dom = phpQuery::newDocument($apartment);
-
-                    /*
-					$contacts = "";
-
-					//Проверяем на наличие каптчи
-					if (strstr($contacts, 'name="captchaCrypt"'))
-					{
-						//Костыль - при создании новой сессии всегда вылетает каптча - так что, рекурсивно вызываем метод.
-						if($this->test)
-						{
-							echo "BUGFIX: Sleep 15 sec. \r\n";
-							$this->logWriter('BUGFIX, URL: '.$link.', page: #'.$this->pageNumber);
-							sleep(15);
-							$document = 0;
-							$this->test = 0;
-							$this->worker();
-							return false;
-						}
-
-						$this->logWriter('captcha, URL: '.$link.', page: #'.$this->pageNumber);
-						return false;
-					}
-					else
-					{*/
-
-                    //Получаем id объявления из URL
-                    $getIdFromURL = explode('-', $link);
-                    $apartmentData['ID'][] = str_replace('.html', '', end($getIdFromURL));
-
-                    //preg_match("/span\stitle='.*?'>(.*?)<\/span/i", $apartment, $date);
-                    //$apartmentData['Дата публикации'][] = mb_convert_encoding($date[1], 'utf-8', 'windows-1251');
-                    //$apartmentData['Дата публикации'][] = $date[1];
-                    $apartmentData['Дата публикации'][] = $dom->find("span.viewbull-header__actuality")->text();
-
-                    //Получаем тип владельца
-                    //$ownerType = $this->checkObject($this->getElementsByAttribute($document, 'isAgency', "data-field"));
-                    $ownerType = $dom->find("span[data-field='isAgency']")->text();
-                    //$ownerType = CreateDocument::fixEncoding($ownerType);
-                    $apartmentData['Предложение от'][] = $ownerType;
-
-                    //$apartmentData['Тип дома'][] = $this->checkObject($this->getElementsByAttribute($document, 'constructionStatus', "data-field"));
-                    $apartmentData['Тип дома'][] = $this->parser->getTypeHouse($dom);
-                    $apartmentData['Район'][] = $this->parser->getAddress($dom,"Район");
-                    $apartmentData['Улица'][] = is_array($this->parser->getAddress($dom, "Адрес")) ? $this->parser->getAddress($dom, "Адрес")["street"] : "";
-                    $apartmentData['Дом'][] = is_array($this->parser->getAddress($dom, "Адрес")) ? $this->parser->getAddress($dom, "Адрес")["house"] : "";
-
-                    //$apartmentData['Тип квартиры'][] = $this->checkObject($this->getElementsByAttribute($document, 'flatType', "data-field"));
-                    $apartmentData['Тип квартиры'][] = str_replace(["\n","\t"],"",$dom->find("span[data-field='flatType']")->text());
-                    //$apartmentData['Площадь'][] = $this->checkObject($this->getElementsByAttribute($document, 'areaTotal', "data-field"));
-                    $apartmentData['Площадь'][] = str_replace(["\n","\t"],"",$dom->find("span[data-field='areaTotal']")->text());
-
-                    /*
-                    if (empty($price = $this->checkObject($this->getElementsByAttribute($document, 'price', "itemprop")))){
-                        $apartmentData['Цена'][] = $this->checkObject($this->getElementsByAttribute($document, 'price-agencySupportCommission', "data-field"));
-                    }
-                    else {
-                        $apartmentData['Цена'][] = $price;
-                    }
-                    */
-                    $apartmentData['Цена'][] = $dom->find("span[itemprop='price']")->text();
-                    //$apartmentData['Заголовок'][] = $this->checkObject($this->getElementsByAttribute($document, 'subject', "data-field"));
-                    $apartmentData['Заголовок'][] = $dom->find("span[data-field='subject']")->text();
-                    /*
-                    if (empty($text = $this->checkObject($this->getElementsByAttribute($document, 'text', "data-field")))){
-                        $apartmentData['Описание'][] = $this->checkObject($this->getElementsByAttribute($document, 'realtyFeature', "data-field"));
-                    }
-                    else{
-                        $apartmentData['Описание'][] = $text;
-                    }
-                    */
-                    $apartmentData['Описание'][] = $this->parser->getDescription($dom);
-                    //$apartmentData['Пользователь'][] = $this->checkObject($this->getElementsByAttribute($document, 'userNick', "class"));
-                    $apartmentData['Пользователь'][] = $this->parser->getUsernick($dom);
-                    //$apartmentData['Контакты'][] = empty($userContacts) ? '' : implode(', ', $userContacts);
-                    $apartmentData['Ссылка'][] = "http://www.farpost.ru/".$link;
-
-                }
-            }
-        }
-		return $apartmentData;
+        return $data;
 	}
 
-
-
-	/*
-    public function getElementsByAttribute(DOMDocument $DOMDocument, $ClassName, $attribute = "class")
-    {
-        $Elements = $DOMDocument -> getElementsByTagName("*");
-        $Matched = array();
-
-        foreach($Elements as $node)
-        {
-            if( ! $node -> hasAttributes())
-                continue;
-
-            $classAttribute = $node -> attributes -> getNamedItem($attribute);
-
-            if( ! $classAttribute)
-                continue;
-
-            $classes = explode(' ', $classAttribute -> nodeValue);
-
-            if(in_array($ClassName, $classes))
-                $Matched[] = $node;
+	private function sendData($data){
+	    //Формируем тело письма
+        $body = '';
+        foreach ($data as $key=>$orders){
+            $body .= "<h1>".$key."</h1><hr>";
+            foreach ($orders as $order){
+                $body .= "<h3><a href='".$order['link']."'>".$order['title']."</a></h3>";
+                $body .= "<p> Дата размещения: ".$order['date']."</p>";
+                $body .= "<p>Цена заявки: ".$order['price']."</p><br>";
+            }
         }
 
-        return $Matched;
-    }
+	    //Отправляем e-mail
+        $mail = new PHPMailer(true);
+        try {
+            /*
+            //SMTP settings
+            $mail->SMTPDebug = 2;
+            $mail->isSMTP();
+            $mail->Host = 'smtp1.example.com;smtp2.example.com';
+            $mail->SMTPAuth = true;
+            $mail->Password = 'secret';
+            $mail->SMTPSecure = 'tls';
+            $mail->Port = 587;
+            */
 
-    private function checkObject($obj)
-    {
-        return count($obj) ? trim($obj[0]->textContent) : '';
-    }
+            //Recipients
+            $mail->setFrom('robot@evg-it.ru', 'Robot Paul');
+            $mail->addAddress($this->addressTo, $this->nameTo);
 
-    public function getContacts($contactsURL)
-    {
-        if($contacts = file_get_contents($contactsURL, false, $this->context))
-        {
-            return $contacts;
-        }
-        else
-        {
-            $this->logWriter('не удалось получить страницу с контактами, код ошибки:'.$http_response_header[0].' URL: '.$contactsURL.', page: '.$this->currentURL);
-            return false;
+            //Content
+            $mail->isHTML(true);
+            $mail->Subject = 'Новые заявки с сайта kadrof.ru';
+            $mail->Body    = $body;
+
+            $mail->send();
+            echo 'Message has been sent';
+
+            //Записывае новую дату в конфиг
+            if (is_writable($this->_configFile)){
+                $dataFile = file($this->_configFile);
+                $dataFile[count($dataFile) - 1] = "define('LAST_DATE','".date("d.m.Y")."');";
+                file_put_contents( $this->_configFile, $dataFile );
+            }
+
+        } catch (Exception $e) {
+            file_put_contents("log.txt",date("d-m-Y H:i")." Message could not be sent.\r\nMailer Error: " . $mail->ErrorInfo);
         }
     }
-	*/
 }
 
