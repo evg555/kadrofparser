@@ -24,8 +24,7 @@ class MainController
         } else {
 	        throw new \Exception("Ошибка в файле конфигурации. Должен быть массив данных!");
         }
-
-        $this->_configFile = $_SERVER["DOCUMENT_ROOT"]."/config.php";
+        $this->_configFile = !empty($_SERVER["DOCUMENT_ROOT"]) ? $_SERVER["DOCUMENT_ROOT"]."/config.php" : "config.php";
 	}
 
     public function worker(){
@@ -110,14 +109,14 @@ class MainController
             $mail->Subject = 'Новые заявки с сайта kadrof.ru';
             $mail->Body    = $body;
 
-            $mail->send();
+            //$mail->send();
             echo 'Message has been sent';
 
             //Записывае новую дату в конфиг
             if (is_writable($this->_configFile)){
                 $dataFile = file($this->_configFile);
                 $dataFile[count($dataFile) - 1] = "define('LAST_DATE','".date("d.m.Y")."');";
-                file_put_contents( $this->_configFile, $dataFile );
+                $res = file_put_contents( $this->_configFile, $dataFile );
             }
 
         } catch (Exception $e) {
