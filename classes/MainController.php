@@ -40,12 +40,15 @@ class MainController
                 $data = $this->parseData($document);
 
                 $reestr = Reestr::getInstance();
-                $reestr->setData($key,$data);
+                if (!empty($data)){
+                    $reestr->setData($key,$data);
+                }
             }
         }
 
-        $this->sendData($reestr->getData());
-
+        if (!empty($reestr->getData())){
+            $this->sendData($reestr->getData());
+        }
     }
 
 	private function parseData($document){
