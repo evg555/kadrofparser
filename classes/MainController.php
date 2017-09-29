@@ -59,7 +59,8 @@ class MainController
             $pq = pq($post);
 
             //Находим даты постов не ранее последней
-            $date = explode(" ",$pq->find(".date")->text())[0];
+            $date = explode(" ",$pq->find(".date")->text());
+            $date = $date[0]." ".$date[2];
             if ($date < $this->lastDate) break;
 
             //Формируем данные
@@ -89,16 +90,6 @@ class MainController
 	    //Отправляем e-mail
         $mail = new PHPMailer(true);
         try {
-            /*
-            //SMTP settings
-            $mail->SMTPDebug = 2;
-            $mail->isSMTP();
-            $mail->Host = 'smtp1.example.com;smtp2.example.com';
-            $mail->SMTPAuth = true;
-            $mail->Password = 'secret';
-            $mail->SMTPSecure = 'tls';
-            $mail->Port = 587;
-            */
             $mail->CharSet = 'utf-8';
             //Recipients
             $mail->setFrom('robot@evg-it.ru', 'Robot Paul');
@@ -115,7 +106,7 @@ class MainController
             //Записывае новую дату в конфиг
             if (is_writable($this->_configFile)){
                 $dataFile = file($this->_configFile);
-                $dataFile[count($dataFile) - 1] = "define('LAST_DATE','".date("d.m.Y")."');";
+                $dataFile[count($dataFile) - 1] = "define('LAST_DATE','".date("d.m.Y H:i")."');";
                 $res = file_put_contents( $this->_configFile, $dataFile );
             }
 
