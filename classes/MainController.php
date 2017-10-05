@@ -2,6 +2,8 @@
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use MiladRahimi\PHPLogger\Logger;
+use MiladRahimi\PHPLogger\Directory;
 
 class MainController
 {
@@ -10,7 +12,9 @@ class MainController
 	public $lastDate = LAST_DATE;
     public $addressTo;
     public $nameTo;
+    public $dir;
     private $_configFile = "";
+    private $_logger = null;
 
 	public function __construct($args)
 	{
@@ -25,9 +29,14 @@ class MainController
 	        throw new \Exception("Ошибка в файле конфигурации. Должен быть массив данных!");
         }
         $this->_configFile = !empty($_SERVER["DOCUMENT_ROOT"]) ? $_SERVER["DOCUMENT_ROOT"]."/config.php" : "config.php";
+
+	    //Запускаем логгер
+        //$dir = new Directory($this->dir);
+        //$this->_logger = new Logger($dir);
 	}
 
     public function worker(){
+        //$this->_logger->log("alert", "This is an alert message!");
 	    foreach ($this->parts as $key=>$part){
             //Получаем контент страницы с заказами
             $url = $this->siteUrl.$part;
@@ -61,7 +70,7 @@ class MainController
             //Находим даты постов не ранее последней
             $date = explode(" ",$pq->find(".date")->text());
             $date = $date[0]." ".$date[2];
-            if ($date < $this->lastDate) break;
+            if (strtotime($date) < strtotime($this->lastDate)) break;
 
             //Формируем данные
             $data[$i]['title'] = $pq->find(".project-title h6 a")->text();
